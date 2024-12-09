@@ -98,10 +98,21 @@ module mars_token_addr::mars_token {
     }
 
     // transfer for owner to do it even with frozen stores
-    public entry fun transfer(owner: &signer, from: address, to: address, amount: u64) acquires Management, PauseStatus {
+    public entry fun transfer_with_ref(owner: &signer, from: address, to: address, amount: u64) acquires Management, PauseStatus {
         let asset = get_metadata();
         let transfer_ref = &authorized_borrow_refs(owner, asset).transfer_ref;
         let from_store = primary_fungible_store::primary_store(from, asset);
+        let to_store = primary_fungible_store::ensure_primary_store_exists(to, asset);
+        let fa = withdraw(from_store, amount, transfer_ref);
+        deposit(to_store, fa, transfer_ref);
+    }
+
+    // public transfer for users
+    public entry fun transfer(owner: &signer, from: address, to: address, amount: u64) acquires Management, PauseStatus {
+        let asset = get_metadata();
+        let from_store = primary_fungible_store::primary_store(from, asset);
+        assert!(object::is_owner(from_store, signer::address_of(owner)), E_NOT_OWNER);
+        let transfer_ref = &borrow_refs(asset).transfer_ref;
         let to_store = primary_fungible_store::ensure_primary_store_exists(to, asset);
         let fa = withdraw(from_store, amount, transfer_ref);
         deposit(to_store, fa, transfer_ref);
@@ -155,6 +166,10 @@ module mars_token_addr::mars_token {
         borrow_global<Management>(object::object_address(&asset))
     }
 
+    inline fun borrow_refs(asset: Object<Metadata>): &Management acquires Management {
+        borrow_global<Management>(object::object_address(&asset))
+    }
+
     #[test(owner=@mars_token_addr)]
     fun test_basic_flow (
         owner: &signer,
@@ -171,7 +186,7 @@ module mars_token_addr::mars_token {
         freeze_account(owner, owner_addr);
         assert!(primary_fungible_store::is_frozen(owner_addr, asset), 6);
 
-        transfer(owner, owner_addr, aaron_address, 10);
+        transfer_with_ref(owner, owner_addr, aaron_address, 10);
         assert!(primary_fungible_store::balance(aaron_address, asset) == 10, 7);
 
         unfreeze_account(owner, owner_addr);
@@ -181,6 +196,27 @@ module mars_token_addr::mars_token {
 
         mint(owner, owner_addr, 100);
         assert!(primary_fungible_store::balance(owner_addr, asset) == 100, 9);
+    }
+
+    #[test(owner=@mars_token_addr, aaron = @0xface)]
+    fun test_transfer (
+        owner: &signer,
+        aaron: &signer,
+    ) acquires Management, PauseStatus {
+        init_module(owner);
+        let owner_addr = signer::address_of(owner);
+        let aaron_address = signer::address_of(aaron);
+
+        mint(owner, owner_addr, 100);
+        let asset = get_metadata();
+        assert!(primary_fungible_store::balance(owner_addr, asset) == 100, 4);
+        assert!(primary_fungible_store::balance(aaron_address, asset) == 0, 5);
+
+        transfer(owner, owner_addr, aaron_address, 10);
+        assert!(primary_fungible_store::balance(aaron_address, asset) == 10, 7);
+
+        transfer(aaron, aaron_address, owner_addr, 10);
+        assert!(primary_fungible_store::balance(aaron_address, asset) == 0, 8);
     }
 
     #[test(owner = @mars_token_addr, aaron = @0xface)]
@@ -203,6 +239,6 @@ module mars_token_addr::mars_token {
         let owner_address = signer::address_of(owner);
         mint(owner, owner_address, 100);
         set_pause(owner, true);
-        transfer(owner, owner_address, @0xface, 10);
+        transfer_with_ref(owner, owner_address, @0xface, 10);
     }
 }
