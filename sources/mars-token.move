@@ -175,12 +175,12 @@ module mars_token_addr::mars_token {
         assert!(primary_fungible_store::balance(aaron_address, asset) == 10, 7);
 
         unfreeze_account(owner, owner_addr);
-        assert!(!primary_fungible_store::is_frozen(owner_addr, asset), 7);
+        assert!(!primary_fungible_store::is_frozen(owner_addr, asset), 8);
 
         burn(owner, owner_addr, 90);
 
         mint(owner, owner_addr, 100);
-        assert!(primary_fungible_store::balance(owner_addr, asset) == 100, 4);
+        assert!(primary_fungible_store::balance(owner_addr, asset) == 100, 9);
     }
 
     #[test(owner = @mars_token_addr, aaron = @0xface)]
